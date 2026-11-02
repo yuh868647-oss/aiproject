@@ -18,7 +18,7 @@ st.write("국가를 선택하면 MBTI 16가지 유형별 비율을 확인할 수
 # -----------------------------------------
 # 2. 데이터 불러오기
 # -----------------------------------------
-DATA_FILE = Path(__file__).parent / "countriesMBTI_16types (1).csv"
+DATA_FILE = Path(__file__).parent / "countriesMBTI_16types.csv"
 
 
 @st.cache_data

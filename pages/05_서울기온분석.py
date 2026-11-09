@@ -3,7 +3,6 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from pathlib import Path
-import re
 
 # --------------------------------------
 # 1. 페이지 설정
@@ -16,7 +15,10 @@ st.set_page_config(
 )
 
 st.title("🌡️ 월별 기온분석")
-st.write("원하는 월을 선택하면 전체 연도의 최고기온과 최저기온을 비교할 수 있어요!")
+st.write(
+    "원하는 월을 선택하면 전체 연도의 "
+    "최고기온과 최저기온을 비교할 수 있어요!"
+)
 
 # --------------------------------------
 # 2. 데이터 불러오기
@@ -25,18 +27,31 @@ st.write("원하는 월을 선택하면 전체 연도의 최고기온과 최저�
 @st.cache_data
 def load_data():
 
-    file_path = Path(__file__).parent / "temperature.csv"
+    # pages 폴더의 상위 폴더에서 CSV 찾기
+    file_path = (
+        Path(__file__).parent.parent / "temperature.csv"
+    )
 
-    # 한글 인코딩 자동 처리
+    if not file_path.exists():
+        raise FileNotFoundError(
+            f"CSV 파일을 찾을 수 없습니다: {file_path}"
+        )
+
+    # 한글 인코딩 처리
     try:
-        df = pd.read_csv(file_path, encoding="cp949")
+        df = pd.read_csv(
+            file_path,
+            encoding="cp949"
+        )
     except UnicodeDecodeError:
-        df = pd.read_csv(file_path, encoding="utf-8-sig")
+        df = pd.read_csv(
+            file_path,
+            encoding="utf-8-sig"
+        )
 
-    # 날짜 데이터 확인
+    # 날짜 정리
     df["일시"] = df["일시"].astype(str).str.strip()
 
-    # 영문 월 이름
     month_dict = {
         "Jan": 1, "Feb": 2, "Mar": 3,
         "Apr": 4, "May": 5, "Jun": 6,
@@ -44,21 +59,21 @@ def load_data():
         "Oct": 10, "Nov": 11, "Dec": 12
     }
 
-    # 월과 두 자리 연도 분리
+    # 월과 연도 분리
     parts = df["일시"].str.extract(
         r"^([A-Za-z]{3})-(\d{2})$"
     )
 
     if parts.isnull().any().any():
-        raise ValueError("날짜 형식을 확인해 주세요.")
+        raise ValueError("날짜 데이터 형식을 확인해 주세요.")
 
     df["월"] = parts[0].map(month_dict)
 
     if df["월"].isnull().any():
-        raise ValueError("인식할 수 없는 월 데이터가 있습니다.")
+        raise ValueError("월 데이터에 잘못된 값이 있습니다.")
 
     # 연도 복원
-    # 데이터는 1907년 10월부터 시간순으로 정렬되어 있음
+    # 1907년 10월부터 시간순으로 정렬된 데이터
     years = []
     previous_year = None
 
@@ -68,9 +83,11 @@ def load_data():
         if previous_year is None:
             year = 1900 + short_year
         else:
-            year = (previous_year // 100) * 100 + short_year
+            year = (
+                (previous_year // 100) * 100
+                + short_year
+            )
 
-            # 연도가 99에서 00으로 넘어가는 경우
             if year < previous_year:
                 year += 100
 
@@ -94,19 +111,23 @@ def load_data():
     return df
 
 
+# --------------------------------------
+# 3. 데이터 실행
+# --------------------------------------
+
 try:
     df = load_data()
 
 except Exception as e:
-    st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
+    st.error(f"데이터 오류: {e}")
     st.stop()
 
 
 # --------------------------------------
-# 3. 월 선택
+# 4. 월 선택
 # --------------------------------------
 
-st.subheader("📅 분석할 월을 선택하세요")
+st.subheader("📅 분석할 월 선택")
 
 month_names = {
     1: "1월", 2: "2월", 3: "3월",
@@ -116,7 +137,7 @@ month_names = {
 }
 
 selected_month = st.selectbox(
-    "월 선택",
+    "월을 선택하세요.",
     options=list(month_names.keys()),
     format_func=lambda x: month_names[x],
     index=0
@@ -124,7 +145,7 @@ selected_month = st.selectbox(
 
 
 # --------------------------------------
-# 4. 선택한 월의 데이터 추출
+# 5. 선택한 월의 데이터 추출
 # --------------------------------------
 
 month_df = df[
@@ -133,7 +154,6 @@ month_df = df[
 
 month_df = month_df.sort_values("연도")
 
-# 결측치 제외
 month_df = month_df.dropna(
     subset=["최고기온(℃)", "최저기온(℃)"],
     how="all"
@@ -141,18 +161,20 @@ month_df = month_df.dropna(
 
 
 # --------------------------------------
-# 5. 기온 그래프 작성
+# 6. 그래프 작성
 # --------------------------------------
+
+st.subheader("📈 월별 기온 그래프")
 
 if month_df.empty:
 
-    st.warning("선택한 월에 분석할 데이터가 없습니다.")
+    st.warning("선택한 월에 데이터가 없습니다.")
 
 else:
 
     fig = go.Figure()
 
-    # 최고기온 그래프 - 연핑크
+    # 최고기온 - 연핑크색
     fig.add_trace(
         go.Scatter(
             x=month_df["연도"],
@@ -164,14 +186,14 @@ else:
                 width=3
             ),
             marker=dict(
-                size=6,
-                color="#FFB6C1"
+                color="#FFB6C1",
+                size=6
             ),
             connectgaps=False
         )
     )
 
-    # 최저기온 그래프 - 하늘색
+    # 최저기온 - 하늘색
     fig.add_trace(
         go.Scatter(
             x=month_df["연도"],
@@ -183,20 +205,20 @@ else:
                 width=3
             ),
             marker=dict(
-                size=6,
-                color="#87CEEB"
+                color="#87CEEB",
+                size=6
             ),
             connectgaps=False
         )
     )
 
-    # 그래프 제목과 축 설정
+    # 그래프 설정
     fig.update_layout(
-        title={
-            "text": "월별 기온분석",
-            "x": 0.5,
-            "xanchor": "center"
-        },
+        title=dict(
+            text="월별 기온분석",
+            x=0.5,
+            xanchor="center"
+        ),
         xaxis_title="연도",
         yaxis_title="온도(℃)",
         legend=dict(
@@ -228,18 +250,15 @@ else:
 
 
 # --------------------------------------
-# 6. 주요 통계 정보
+# 7. 주요 통계
 # --------------------------------------
 
-st.subheader("📊 선택한 월의 기온 통계")
+st.subheader("📊 기온 통계")
 
 col1, col2, col3 = st.columns(3)
 
 max_temp = month_df["최고기온(℃)"].max()
 min_temp = month_df["최저기온(℃)"].min()
-
-avg_max = month_df["최고기온(℃)"].mean()
-avg_min = month_df["최저기온(℃)"].mean()
 
 with col1:
     st.metric(
@@ -261,10 +280,10 @@ with col3:
 
 
 # --------------------------------------
-# 7. 상세 데이터 표
+# 8. 상세 데이터
 # --------------------------------------
 
-st.subheader("📋 연도별 상세 기온 데이터")
+st.subheader("📋 연도별 상세 데이터")
 
 result = month_df[
     ["연도", "최고기온(℃)", "최저기온(℃)"]
@@ -282,8 +301,9 @@ st.dataframe(
     hide_index=True
 )
 
+
 # --------------------------------------
-# 8. 데이터 다운로드
+# 9. CSV 다운로드
 # --------------------------------------
 
 csv_data = result.to_csv(
@@ -291,10 +311,12 @@ csv_data = result.to_csv(
 ).encode("utf-8-sig")
 
 st.download_button(
-    label="📥 분석 결과 CSV 다운로드",
+    label="📥 분석 결과 다운로드",
     data=csv_data,
     file_name=f"{selected_month}월_기온분석.csv",
     mime="text/csv"
 )
 
-st.caption("※ 원본 데이터의 결측값은 그래프와 통계에서 제외됩니다.")
+st.caption(
+    "※ 원본 데이터의 결측값은 그래프와 통계에서 제외됩니다."
+)

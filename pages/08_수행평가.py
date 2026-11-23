@@ -178,7 +178,7 @@ else:
 # 지원인원 / 응시인원 막대그래프
 # --------------------------------------------------
 st.divider()
-st.subheader("📊 지원인원과 응시인원 비교")
+st.subheader("📈 지원인원과 응시인원 추이")
 
 count_chart = selected_data[
     ["시험일정", "지원인원(명)", "응시인원(명)"]
@@ -187,13 +187,13 @@ count_chart = selected_data[
 count_chart = count_chart.set_index("시험일정")
 count_chart.columns = ["지원인원", "응시인원"]
 
-st.bar_chart(count_chart, height=400)
+st.line_chart(count_chart, height=400)
 
 # --------------------------------------------------
 # 응시율 막대그래프
 # --------------------------------------------------
 st.divider()
-st.subheader("📈 응시율")
+st.subheader("📉 응시율 추이")
 
 rate_chart = selected_data[
     ["시험일정", "응시율(퍼센트)"]
@@ -202,7 +202,7 @@ rate_chart = selected_data[
 rate_chart = rate_chart.set_index("시험일정")
 rate_chart.columns = ["응시율(%)"]
 
-st.bar_chart(rate_chart, height=300)
+st.line_chart(rate_chart, height=300)
 
 # --------------------------------------------------
 # 상세 데이터 표

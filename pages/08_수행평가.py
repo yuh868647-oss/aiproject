@@ -124,9 +124,41 @@ fig.update_layout(
     margin=dict(l=20, r=20, t=60, b=20)
 )
 fig.update_xaxes(title_text="학년도", dtick=2)
-fig.update_yaxes(title_text="지원인원 / 응시인원 (명)", secondary_y=False)
-fig.update_yaxes(title_text="응시율 (%)", secondary_y=True)
+
+# 세로축 범위를 실제 데이터에 맞춰 좁혀 연도별 차이가 잘 보이게 설정
+# 0부터 시작하지 않는 축이므로 그래프 아래에 안내 문구를 표시합니다.
+person_values = pd.concat([
+    chart_data["지원인원(명)"],
+    chart_data["응시인원(명)"]
+]).dropna()
+
+person_min = float(person_values.min())
+person_max = float(person_values.max())
+person_padding = max((person_max - person_min) * 0.08, 10000)
+
+fig.update_yaxes(
+    title_text="지원인원 / 응시인원 (명)",
+    range=[max(0, person_min - person_padding), person_max + person_padding],
+    tickformat=",",
+    secondary_y=False
+)
+
+rate_min = float(chart_data["응시율(퍼센트)"].min())
+rate_max = float(chart_data["응시율(퍼센트)"].max())
+rate_padding = max((rate_max - rate_min) * 0.12, 1)
+
+fig.update_yaxes(
+    title_text="응시율 (%)",
+    range=[max(0, rate_min - rate_padding), min(100, rate_max + rate_padding)],
+    ticksuffix="%",
+    secondary_y=True
+)
+
 st.plotly_chart(fig, use_container_width=True)
+st.caption(
+    "※ 연도별 변화가 잘 보이도록 세로축을 데이터 범위에 맞춰 확대했습니다. "
+    "따라서 인원수 축은 0부터 시작하지 않습니다."
+)
 
 st.divider()
 st.subheader("📋 선택한 학년도 상세 데이터")

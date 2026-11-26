@@ -1,65 +1,38 @@
 import streamlit as st
 import pandas as pd
 from pathlib import Path
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-# --------------------------------------------------
-# 페이지 기본 설정
-# --------------------------------------------------
-st.set_page_config(
-    page_title="수능 연도별 응시현황",
-    page_icon="📊",
-    layout="wide"
-)
-
+st.set_page_config(page_title="수능 연도별 응시현황", page_icon="📊", layout="wide")
 st.title("📊 대학수학능력시험 연도별 응시현황")
-st.write("학년도를 선택하면 해당 연도의 지원인원, 응시인원, 응시율을 확인할 수 있어요.")
+st.write("학년도를 선택하면 해당 연도의 수치와 전체 학년도별 변화 추이를 확인할 수 있어요.")
 
-# --------------------------------------------------
-# CSV 파일 경로 자동 찾기
-# app.py와 같은 폴더 또는 상위 폴더에서 검색
-# --------------------------------------------------
 CSV_FILE_NAME = "한국교육과정평가원_대학수학능력시험 연도별 응시현황_20251231(2).csv"
 
 def find_csv_file():
     app_folder = Path(__file__).resolve().parent
-
-    # app.py가 루트 폴더에 있거나 pages 폴더 안에 있는 경우 모두 대응
-    search_folders = [
-        app_folder,
-        app_folder.parent,
-        Path.cwd(),
-        Path.cwd().parent
-    ]
-
+    folders = [app_folder, app_folder.parent, Path.cwd(), Path.cwd().parent]
     checked = []
-    for folder in search_folders:
+    for folder in folders:
         folder = folder.resolve()
         if folder not in checked:
             checked.append(folder)
-
-    # 먼저 정확한 파일명으로 검색
     for folder in checked:
         candidate = folder / CSV_FILE_NAME
         if candidate.is_file():
             return candidate, checked
-
-    # 파일명이 조금 달라진 경우에도 수능 응시현황 CSV를 찾아봄
     for folder in checked:
         if folder.is_dir():
             matches = list(folder.glob("*대학수학능력시험*응시현황*.csv"))
             if matches:
                 return matches[0], checked
-
     return None, checked
-
 
 @st.cache_data
 def load_data(file_path):
-    # 한글 CSV 인코딩 자동 대응
-    encodings = ["cp949", "euc-kr", "utf-8-sig", "utf-8"]
     last_error = None
-
-    for encoding in encodings:
+    for encoding in ["cp949", "euc-kr", "utf-8-sig", "utf-8"]:
         try:
             data = pd.read_csv(file_path, encoding=encoding)
             break
@@ -68,57 +41,26 @@ def load_data(file_path):
     else:
         raise ValueError(f"CSV 인코딩을 확인할 수 없습니다: {last_error}")
 
-    # 열 이름 앞뒤 공백 제거
     data.columns = data.columns.astype(str).str.strip()
+    required = ["학년도", "시험일정", "지원인원(명)", "응시인원(명)", "응시율(퍼센트)"]
+    missing = [column for column in required if column not in data.columns]
+    if missing:
+        raise ValueError("CSV 파일에 필요한 열이 없습니다: " + ", ".join(missing))
 
-    required_columns = [
-        "학년도",
-        "시험일정",
-        "지원인원(명)",
-        "응시인원(명)",
-        "응시율(퍼센트)"
-    ]
-
-    missing_columns = [col for col in required_columns if col not in data.columns]
-    if missing_columns:
-        raise ValueError(
-            "CSV 파일에 필요한 열이 없습니다: " + ", ".join(missing_columns)
-        )
-
-    # 숫자 데이터 변환
-    numeric_columns = [
-        "학년도",
-        "지원인원(명)",
-        "응시인원(명)",
-        "응시율(퍼센트)"
-    ]
-
-    for column in numeric_columns:
+    for column in ["학년도", "지원인원(명)", "응시인원(명)", "응시율(퍼센트)"]:
         data[column] = pd.to_numeric(data[column], errors="coerce")
-
     data["시험일정"] = data["시험일정"].fillna("").astype(str)
-    data = data.dropna(subset=numeric_columns)
-
+    data = data.dropna(subset=["학년도", "지원인원(명)", "응시인원(명)", "응시율(퍼센트)"])
+    data["학년도"] = data["학년도"].astype(int)
     return data
 
-
 csv_path, checked_folders = find_csv_file()
-
 if csv_path is None:
     st.error("CSV 파일을 찾을 수 없습니다.")
     st.write("다음 폴더에서 CSV 파일을 검색했습니다.")
-
     for folder in checked_folders:
         st.code(str(folder))
-
-    st.warning("CSV 파일을 GitHub 저장소에 업로드했는지 확인해주세요.")
-    st.write("권장 폴더 구성:")
-    st.code(
-        "프로젝트 폴더/\n"
-        "├── app.py\n"
-        "├── requirements.txt\n"
-        "└── 한국교육과정평가원_대학수학능력시험 연도별 응시현황_20251231(2).csv"
-    )
+    st.info("CSV 파일을 app.py와 같은 폴더 또는 app.py의 상위 폴더에 업로드해주세요.")
     st.stop()
 
 try:
@@ -128,100 +70,67 @@ except Exception as error:
     st.stop()
 
 if df.empty:
-    st.error("분석할 데이터가 없습니다. CSV 파일의 내용을 확인해주세요.")
+    st.error("분석할 데이터가 없습니다.")
     st.stop()
 
-# --------------------------------------------------
-# 학년도 선택
-# --------------------------------------------------
-years = sorted(
-    df["학년도"].dropna().astype(int).unique().tolist(),
-    reverse=True
-)
-
-selected_year = st.selectbox(
-    "🗓️ 확인하고 싶은 학년도를 선택하세요.",
-    years
-)
-
-selected_data = df[df["학년도"] == selected_year].copy()
-selected_data = selected_data.sort_values("시험일정")
-
+years = sorted(df["학년도"].unique().tolist(), reverse=True)
+selected_year = st.selectbox("🗓️ 확인하고 싶은 학년도를 선택하세요.", years)
+selected_data = df[df["학년도"] == selected_year].sort_values("시험일정").copy()
 st.subheader(f"🎓 {selected_year}학년도 수능 응시현황")
 
-# --------------------------------------------------
-# 선택한 학년도 데이터 표시
-# --------------------------------------------------
 if len(selected_data) == 1:
     row = selected_data.iloc[0]
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("📝 지원인원", f"{int(row['지원인원(명)']):,}명")
-    col2.metric("✏️ 응시인원", f"{int(row['응시인원(명)']):,}명")
-    col3.metric("📈 응시율", f"{row['응시율(퍼센트)']:.1f}%")
-
+    c1, c2, c3 = st.columns(3)
+    c1.metric("📝 지원인원", f"{int(row['지원인원(명)']):,}명")
+    c2.metric("✏️ 응시인원", f"{int(row['응시인원(명)']):,}명")
+    c3.metric("📈 응시율", f"{row['응시율(퍼센트)']:.1f}%")
     st.caption(f"시험일정: {row['시험일정']}")
 else:
-    st.info(
-        f"{selected_year}학년도에는 시험 기록이 {len(selected_data)}개 있습니다. "
-        "각 시험일정별로 구분하여 표시합니다."
-    )
-
+    st.info(f"{selected_year}학년도에는 시험 기록이 {len(selected_data)}개 있습니다.")
     for _, row in selected_data.iterrows():
         st.markdown(f"**시험일정: {row['시험일정']}**")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("📝 지원인원", f"{int(row['지원인원(명)']):,}명")
-        col2.metric("✏️ 응시인원", f"{int(row['응시인원(명)']):,}명")
-        col3.metric("📈 응시율", f"{row['응시율(퍼센트)']:.1f}%")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("📝 지원인원", f"{int(row['지원인원(명)']):,}명")
+        c2.metric("✏️ 응시인원", f"{int(row['응시인원(명)']):,}명")
+        c3.metric("📈 응시율", f"{row['응시율(퍼센트)']:.1f}%")
 
-# --------------------------------------------------
-# 지원인원 / 응시인원 막대그래프
-# --------------------------------------------------
 st.divider()
-st.subheader("📈 지원인원과 응시인원 추이")
+st.subheader("📈 전체 학년도별 지원인원·응시인원·응시율 선 그래프")
+st.caption("파란색 선: 지원인원 · 빨간색 선: 응시인원 · 초록색 선: 응시율. 선택한 학년도는 큰 점으로 강조됩니다.")
 
-count_chart = selected_data[
-    ["시험일정", "지원인원(명)", "응시인원(명)"]
-].copy()
+chart_data = df.sort_values(["학년도", "시험일정"]).copy()
+marker_sizes = [12 if year == selected_year else 5 for year in chart_data["학년도"]]
+fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-count_chart = count_chart.set_index("시험일정")
-count_chart.columns = ["지원인원", "응시인원"]
+fig.add_trace(go.Scatter(
+    x=chart_data["학년도"], y=chart_data["지원인원(명)"],
+    mode="lines+markers", name="지원인원",
+    line=dict(color="#2878B5", width=3), marker=dict(size=marker_sizes)
+), secondary_y=False)
+fig.add_trace(go.Scatter(
+    x=chart_data["학년도"], y=chart_data["응시인원(명)"],
+    mode="lines+markers", name="응시인원",
+    line=dict(color="#E45756", width=3), marker=dict(size=marker_sizes)
+), secondary_y=False)
+fig.add_trace(go.Scatter(
+    x=chart_data["학년도"], y=chart_data["응시율(퍼센트)"],
+    mode="lines+markers", name="응시율",
+    line=dict(color="#2CA25F", width=3, dash="dash"), marker=dict(size=marker_sizes)
+), secondary_y=True)
 
-st.line_chart(count_chart, height=400)
+fig.update_layout(
+    height=600, hovermode="x unified",
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    margin=dict(l=20, r=20, t=60, b=20)
+)
+fig.update_xaxes(title_text="학년도", dtick=2)
+fig.update_yaxes(title_text="지원인원 / 응시인원 (명)", secondary_y=False)
+fig.update_yaxes(title_text="응시율 (%)", secondary_y=True)
+st.plotly_chart(fig, use_container_width=True)
 
-# --------------------------------------------------
-# 응시율 막대그래프
-# --------------------------------------------------
-st.divider()
-st.subheader("📉 응시율 추이")
-
-rate_chart = selected_data[
-    ["시험일정", "응시율(퍼센트)"]
-].copy()
-
-rate_chart = rate_chart.set_index("시험일정")
-rate_chart.columns = ["응시율(%)"]
-
-st.line_chart(rate_chart, height=300)
-
-# --------------------------------------------------
-# 상세 데이터 표
-# --------------------------------------------------
 st.divider()
 st.subheader("📋 선택한 학년도 상세 데이터")
-
-display_data = selected_data[
-    ["학년도", "시험일정", "지원인원(명)", "응시인원(명)", "응시율(퍼센트)"]
-].copy()
-
-display_data.columns = [
-    "학년도",
-    "시험일정",
-    "지원인원(명)",
-    "응시인원(명)",
-    "응시율(%)"
-]
-
+display_data = selected_data[["학년도", "시험일정", "지원인원(명)", "응시인원(명)", "응시율(퍼센트)"]].copy()
+display_data.columns = ["학년도", "시험일정", "지원인원(명)", "응시인원(명)", "응시율(%)"]
 st.dataframe(display_data, use_container_width=True, hide_index=True)
-
 st.caption("자료: 한국교육과정평가원 대학수학능력시험 연도별 응시현황")
